@@ -465,13 +465,15 @@ callers need `secrets: inherit` or explicit secret mappings.
 
 ### Tooling
 
-The action runs on the runner's own `python3`, version 3.11 or later,
-with `pip`. GitHub-hosted `ubuntu-24.04` runners (`ubuntu-latest`) have
-both and need no `setup-python` step. `ubuntu-22.04` ships
-Python 3.10, which is end of life and no longer supported: on that
-image, and on a self-hosted runner without a recent Python, run
-`actions/setup-python` with 3.11 or later before this action. The
-action validates the interpreter before it does any work.
+The action sets up its own Python 3.13 with `actions/setup-python`, so
+the `python3` on the caller's `PATH` cannot choose the interpreter that
+runs with the action's inputs and secrets. Callers need no
+`setup-python` step, and one they run does not change the interpreter
+the action uses. The action passes `update-environment: false`, so it
+leaves the caller's `PATH` and Python environment unchanged for later
+steps. GitHub-hosted runners have Python 3.13 in their tool cache; a
+self-hosted runner without it downloads it from
+`actions/python-versions`.
 
 Uploads to S3 or R2 use boto3, which the action installs at run time
 from the hash-pinned `requirements.txt` into the runner temp directory.
@@ -480,7 +482,9 @@ artifact destination alone installs nothing.
 
 Jobs that run harden-runner with `egress-policy: block` must allow
 `pypi.org:443` and `files.pythonhosted.org:443` for that install, as
-well as the S3 or R2 endpoint.
+well as the S3 or R2 endpoint. On a runner that has to download
+Python, they must also allow `raw.githubusercontent.com:443`,
+`github.com:443` and `release-assets.githubusercontent.com:443`.
 
 ## Testing
 

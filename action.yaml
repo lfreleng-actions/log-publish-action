@@ -244,10 +244,23 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # The action's own interpreter, so the caller's PATH cannot choose
+    # it. update-environment off leaves the caller's PATH and
+    # pythonLocation untouched for the job's later steps; the explicit
+    # version keeps a .python-version in the workspace from applying.
+    - name: 'Set up Python'
+      id: setup-python
+      # yamllint disable-line rule:line-length
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      with:
+        python-version: '3.13'
+        update-environment: false
+
     - name: 'Validate inputs'
       id: validate
       shell: bash
       env:
+        PYTHON: "${{ steps.setup-python.outputs.python-path }}"
         INPUT_DESTINATION: "${{ inputs.destination }}"
         INPUT_S3_BUCKET: "${{ inputs.s3_bucket }}"
         INPUT_S3_PATH: "${{ inputs.s3_path }}"
@@ -270,18 +283,17 @@ runs:
         INPUT_GITHUB_TOKEN: "${{ inputs.github_token }}"
         INPUT_DRY_RUN: "${{ inputs.dry_run }}"
         INPUT_PERMIT_FAIL: "${{ inputs.permit_fail }}"
-      # The runner's own python3; the action needs no setup-python step.
       # -I and -E -s keep PYTHON* variables and user site packages out,
       # so no sitecustomize from the caller runs with these secrets.
       # main.py keeps -E -s: -I would also drop the script's own
       # directory (the action's src/) from sys.path.
       run: |
-        if ! python3 -I -c 'import sys; sys.exit(sys.version_info < (3, 11))'
+        if ! "$PYTHON" -I -c 'import sys; sys.exit(sys.version_info < (3, 11))'
         then
-          echo "::error::log-publish-action needs python3 >= 3.11 on PATH"
+          echo "::error::log-publish-action needs Python >= 3.11"
           exit 1
         fi
-        python3 -E -s "$GITHUB_ACTION_PATH/src/main.py" validate
+        "$PYTHON" -E -s "$GITHUB_ACTION_PATH/src/main.py" validate
 
     - name: 'Collect and publish logs'
       id: publish
@@ -314,10 +326,11 @@ runs:
         INPUT_GITHUB_TOKEN: "${{ inputs.github_token }}"
         INPUT_DRY_RUN: "${{ inputs.dry_run }}"
         INPUT_PERMIT_FAIL: "${{ inputs.permit_fail }}"
+        PYTHON: "${{ steps.setup-python.outputs.python-path }}"
       # boto3 is installed from the hash pinned requirements.txt, only
       # when something is uploaded to S3 or R2.
       run: |
-        python3 -E -s "$GITHUB_ACTION_PATH/src/main.py" publish
+        "$PYTHON" -E -s "$GITHUB_ACTION_PATH/src/main.py" publish
 
     # Runs whenever the script handed over a staged tree for an artifact.
     # The script parses the destination list, so key off its outputs
